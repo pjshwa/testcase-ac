@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { ApiError, submitCustomStress } from "../api";
 import CodeEditor from "../components/CodeEditor";
@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useI18n, type TranslationKey } from "../lib/i18n";
+import { useElapsedSeconds } from "../lib/useElapsedSeconds";
 import { usePersistentSettings } from "../lib/persistentSettings";
 import { defaultSource } from "../lib/sourceTemplates";
 import { cn } from "../lib/utils";
@@ -66,26 +67,13 @@ export default function CustomInvocationPage() {
   const [checkerSource, setCheckerSource] = useState("");
   const [iterations, setIterations] = useState(ITERATIONS_DEFAULT);
   const [lastSubmittedRequest, setLastSubmittedRequest] = useState<string | null>(null);
-  const [submitElapsedSeconds, setSubmitElapsedSeconds] = useState(0);
   const [nextGeneratorIndex, setNextGeneratorIndex] = useState(1);
   const [nextTextcaseIndex, setNextTextcaseIndex] = useState(1);
 
   const stressMutation = useMutation({
     mutationFn: (payload: StressRequest) => submitCustomStress(payload),
   });
-
-  useEffect(() => {
-    if (!stressMutation.isPending) {
-      setSubmitElapsedSeconds(0);
-      return;
-    }
-    const startedAt = Date.now();
-    setSubmitElapsedSeconds(0);
-    const timer = window.setInterval(() => {
-      setSubmitElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [stressMutation.isPending]);
+  const submitElapsedSeconds = useElapsedSeconds(stressMutation.isPending);
 
   function handleLanguageChange(next: LanguageValue, setLanguage: (value: LanguageValue) => void) {
     setLastManualLanguage(next);

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { guessLanguage, resolveDetectedLanguage } from "@/lib/languageDetection";
+import { useElapsedSeconds } from "@/lib/useElapsedSeconds";
 import { usePersistentSettings } from "@/lib/persistentSettings";
 import { defaultSource } from "@/lib/sourceTemplates";
 import { cn } from "@/lib/utils";
@@ -167,11 +168,10 @@ function ProblemWorkspace({ problemType, externalId }: { problemType: string; ex
   const [selectedTestcases, setSelectedTestcases] = useState<string[]>([]);
   const [iterations, setIterations] = useState<number>(ITERATIONS_DEFAULT);
   const [lastSubmittedRequest, setLastSubmittedRequest] = useState<string | null>(null);
-  const [submitElapsedSeconds, setSubmitElapsedSeconds] = useState(0);
-
   const stressMutation = useMutation({
     mutationFn: (payload: StressRequest) => submitStress(problemType, externalId, payload),
   });
+  const submitElapsedSeconds = useElapsedSeconds(stressMutation.isPending);
 
   useEffect(() => {
     if (!problemQuery.data) return;
@@ -190,19 +190,6 @@ function ProblemWorkspace({ problemType, externalId }: { problemType: string; ex
       setLanguage(detectedLanguage);
     }
   }, [language, lastManualCppLanguage, source, useLanguageAutodetect]);
-
-  useEffect(() => {
-    if (!stressMutation.isPending) {
-      setSubmitElapsedSeconds(0);
-      return;
-    }
-    const startedAt = Date.now();
-    setSubmitElapsedSeconds(0);
-    const timer = window.setInterval(() => {
-      setSubmitElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [stressMutation.isPending]);
 
   function handleManualLanguageChange(next: LanguageValue) {
     if (isUsingAutoFilledSource({ source, problemType, externalId, language })) {
