@@ -13,6 +13,7 @@ import { defaultSource } from "@/lib/sourceTemplates";
 import { cn } from "@/lib/utils";
 import { ApiError, getProblem, submitStress } from "../api";
 import CodeEditor from "../components/CodeEditor";
+import LanguageField from "../components/LanguageField";
 import StressResultView from "../components/StressResult";
 import { problemDirUrl, sourceFileUrl } from "../github";
 import { useI18n, type TranslationKey } from "../lib/i18n";
@@ -28,7 +29,6 @@ import {
   ITERATIONS_DEFAULT,
   ITERATIONS_MAX,
   ITERATIONS_MIN,
-  LANGUAGES,
 } from "../types";
 
 const PROBLEM_1000_DEFAULT_CPP_SOURCE = `#include <iostream>
@@ -311,21 +311,12 @@ function ProblemWorkspace({ problemType, externalId }: { problemType: string; ex
         <CardContent>
           <form className="space-y-4" onSubmit={onSubmit}>
             <div className="flex flex-wrap items-center gap-3">
-              <label htmlFor="lang" className="text-sm font-medium">
-                {t("problem.language")}
-              </label>
-              <select
+              <LanguageField
                 id="lang"
-                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 value={language}
-                onChange={(e) => handleManualLanguageChange(e.target.value as LanguageValue)}
-              >
-                {LANGUAGES.map((l) => (
-                  <option key={l.value} value={l.value}>
-                    {l.label}
-                  </option>
-                ))}
-              </select>
+                onChange={handleManualLanguageChange}
+                orientation="horizontal"
+              />
               <label className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Switch
                   checked={useLanguageAutodetect}

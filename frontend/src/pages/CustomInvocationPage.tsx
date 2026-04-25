@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { ApiError, submitCustomStress } from "../api";
 import CodeEditor from "../components/CodeEditor";
+import LanguageField from "../components/LanguageField";
 import StressResultView from "../components/StressResult";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +20,6 @@ import {
   ITERATIONS_DEFAULT,
   ITERATIONS_MAX,
   ITERATIONS_MIN,
-  LANGUAGES,
   MEMORY_LIMIT_DEFAULT_MB,
   MEMORY_LIMIT_MAX_MB,
   MEMORY_LIMIT_MIN_MB,
@@ -505,38 +505,6 @@ function buildCustomStressRequest({
     })),
     iterations: clampIterations(iterations),
   };
-}
-
-function LanguageField({
-  id,
-  value,
-  onChange,
-}: {
-  id: string;
-  value: LanguageValue;
-  onChange: (value: LanguageValue) => void;
-}) {
-  const { t } = useI18n();
-
-  return (
-    <div className="space-y-2">
-      <label htmlFor={id} className="text-sm font-medium">
-        {t("problem.language")}
-      </label>
-      <select
-        id={id}
-        value={value}
-        onChange={(event) => onChange(event.target.value as LanguageValue)}
-        className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      >
-        {LANGUAGES.map((language) => (
-          <option key={language.value} value={language.value}>
-            {language.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
 }
 
 function NumberField({
