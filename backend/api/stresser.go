@@ -43,7 +43,8 @@ func NewLocalDockerStresserClient(endpoint string) *LocalDockerStresserClient {
 }
 
 func (c *LocalDockerStresserClient) Invoke(ctx context.Context, event contracts.StressEvent) (contracts.StressResult, error) {
-	slog.Info("stresser_invoke", "mode", "local_docker", "endpoint", c.endpoint)
+	start := time.Now()
+	slog.Info("stresser_invoke", "request_id", event.RequestID, "mode", "local_docker", "endpoint", c.endpoint)
 	body, err := json.Marshal(event)
 	if err != nil {
 		return contracts.StressResult{}, err
@@ -55,13 +56,21 @@ func (c *LocalDockerStresserClient) Invoke(ctx context.Context, event contracts.
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.client.Do(req)
 	if err != nil {
+		slog.Warn("stresser_invoke_failed", "request_id", event.RequestID, "mode", "local_docker", "err", err, "elapsed_ms", time.Since(start).Milliseconds())
 		return contracts.StressResult{}, &StresserInvokeError{StatusCode: http.StatusServiceUnavailable, Detail: "Stresser is unavailable, try again shortly."}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		slog.Warn("stresser_invoke_failed", "request_id", event.RequestID, "mode", "local_docker", "status", resp.StatusCode, "elapsed_ms", time.Since(start).Milliseconds())
 		return contracts.StressResult{}, &StresserInvokeError{StatusCode: http.StatusServiceUnavailable, Detail: "Stresser is unavailable, try again shortly."}
 	}
-	return decodeJSON(resp.Body, "Stresser returned an invalid response, try again shortly.")
+	result, err := decodeJSON(resp.Body, "Stresser returned an invalid response, try again shortly.")
+	if err != nil {
+		slog.Warn("stresser_invoke_failed", "request_id", event.RequestID, "mode", "local_docker", "err", err, "elapsed_ms", time.Since(start).Milliseconds())
+		return contracts.StressResult{}, err
+	}
+	slog.Info("stresser_invoke_done", "request_id", event.RequestID, "mode", "local_docker", "elapsed_ms", time.Since(start).Milliseconds(), "stresser_error", result.Error)
+	return result, err
 }
 
 type LambdaStresserClient struct {
@@ -81,7 +90,8 @@ func NewLambdaStresserClient(ctx context.Context, functionName, region string) (
 }
 
 func (c *LambdaStresserClient) Invoke(ctx context.Context, event contracts.StressEvent) (contracts.StressResult, error) {
-	slog.Info("stresser_invoke", "mode", "lambda", "function", c.functionName)
+	start := time.Now()
+	slog.Info("stresser_invoke", "request_id", event.RequestID, "mode", "lambda", "function", c.functionName)
 	payload, err := json.Marshal(event)
 	if err != nil {
 		return contracts.StressResult{}, err
@@ -93,18 +103,27 @@ func (c *LambdaStresserClient) Invoke(ctx context.Context, event contracts.Stres
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "TooManyRequestsException") {
+			slog.Warn("stresser_invoke_failed", "request_id", event.RequestID, "mode", "lambda", "function", c.functionName, "err", err, "status", http.StatusTooManyRequests, "elapsed_ms", time.Since(start).Milliseconds())
 			return contracts.StressResult{}, &StresserInvokeError{StatusCode: http.StatusTooManyRequests, Detail: "Stresser is at capacity, try again shortly."}
 		}
+		slog.Warn("stresser_invoke_failed", "request_id", event.RequestID, "mode", "lambda", "function", c.functionName, "err", err, "elapsed_ms", time.Since(start).Milliseconds())
 		return contracts.StressResult{}, &StresserInvokeError{StatusCode: http.StatusServiceUnavailable, Detail: "Stresser is unavailable, try again shortly."}
 	}
 	if resp.StatusCode >= 500 {
+		slog.Warn("stresser_invoke_failed", "request_id", event.RequestID, "mode", "lambda", "function", c.functionName, "status", resp.StatusCode, "elapsed_ms", time.Since(start).Milliseconds())
 		return contracts.StressResult{}, &StresserInvokeError{StatusCode: http.StatusServiceUnavailable, Detail: "Stresser is unavailable, try again shortly."}
 	}
 	if resp.FunctionError != nil && *resp.FunctionError != "" {
-		slog.Error("lambda_stresser_function_error", "function", c.functionName, "payload", string(resp.Payload))
+		slog.Error("lambda_stresser_function_error", "request_id", event.RequestID, "function", c.functionName, "payload", string(resp.Payload), "elapsed_ms", time.Since(start).Milliseconds())
 		return contracts.StressResult{}, &StresserInvokeError{StatusCode: http.StatusServiceUnavailable, Detail: "Stresser failed before returning a valid response."}
 	}
-	return decodeJSON(bytes.NewReader(resp.Payload), "Stresser returned an invalid response, try again shortly.")
+	result, err := decodeJSON(bytes.NewReader(resp.Payload), "Stresser returned an invalid response, try again shortly.")
+	if err != nil {
+		slog.Warn("stresser_invoke_failed", "request_id", event.RequestID, "mode", "lambda", "function", c.functionName, "err", err, "elapsed_ms", time.Since(start).Milliseconds())
+		return contracts.StressResult{}, err
+	}
+	slog.Info("stresser_invoke_done", "request_id", event.RequestID, "mode", "lambda", "function", c.functionName, "elapsed_ms", time.Since(start).Milliseconds(), "stresser_error", result.Error)
+	return result, err
 }
 
 func MakeStresserClient(ctx context.Context, settings Settings) (StresserClient, error) {

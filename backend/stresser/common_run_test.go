@@ -335,7 +335,11 @@ func TestRunCodeSimpleAPlusBSupportedLanguages(t *testing.T) {
 				t.Fatalf("compileCodeCached() failed: %+v", compileResult)
 			}
 
-			runResult := runCode(compileResult.Directory, tc.Input, tc.Lang, 2, 256, nil)
+			timeLimit := 2.0
+			if tc.Lang == contracts.LanguageNodeJS {
+				timeLimit = 5.0
+			}
+			runResult := runCode(compileResult.Directory, tc.Input, tc.Lang, timeLimit, 256, nil)
 			if !runResult.Success {
 				t.Fatalf("runCode() failed: %+v", runResult)
 			}

@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"math/rand"
 	"sort"
 	"strings"
@@ -87,7 +87,7 @@ func operationStress(event contracts.StressEvent) (contracts.StressResult, error
 		)
 	}
 
-	log.Printf("----- Compiling target -----")
+	slog.Info("compile_start", "phase", "target")
 	events.record("target_compile_start", "")
 	targetDir, err := compileAndGetDir(normalized.TargetCode, normalized.TargetCodeLang, contracts.ErrorTypeTargetCompilationFailed)
 	if err != nil {
@@ -95,7 +95,7 @@ func operationStress(event contracts.StressEvent) (contracts.StressResult, error
 	}
 	events.record("target_compile_done", "")
 
-	log.Printf("----- Compiling correct -----")
+	slog.Info("compile_start", "phase", "correct")
 	events.record("correct_compile_start", "")
 	correctDir, err := compileAndGetDir(normalized.CorrectCode, normalized.CorrectCodeLang, contracts.ErrorTypeCorrectCompilationFailed)
 	if err != nil {
@@ -105,7 +105,7 @@ func operationStress(event contracts.StressEvent) (contracts.StressResult, error
 
 	var checkerProgram *compiledProgram
 	if normalized.CheckerCode != "" {
-		log.Printf("----- Compiling checker -----")
+		slog.Info("compile_start", "phase", "checker")
 		events.record("checker_compile_start", "")
 		checkerDir, err := compileAndGetDir(normalized.CheckerCode, contracts.LanguageCpp23, contracts.ErrorTypeCheckerCompilationFailed)
 		if err != nil {
@@ -269,11 +269,11 @@ func runStressLoop(
 	for iteration := 0; iteration < iterations; iteration++ {
 		events.record("iteration_start", itoa(iteration))
 		if time.Since(startTime) > maxWallTimeSeconds*time.Second {
-			log.Printf("Wall time limit reached, exiting stress loop")
+			slog.Info("stress_loop_exit", "reason", "wall_time_limit", "iteration", iteration, "max_wall_time_seconds", maxWallTimeSeconds)
 			break
 		}
 		if iteration > 0 && iteration%10 == 0 && len(correctCases) < iteration/10 {
-			log.Printf("Correct rate too low, exiting stress loop")
+			slog.Info("stress_loop_exit", "reason", "correct_rate_too_low", "iteration", iteration, "correct_cases", len(correctCases))
 			break
 		}
 		if len(generatorExecutionErrors) >= maxGeneratorExecutionErrors {
@@ -296,7 +296,7 @@ func runStressLoop(
 		iterationResult, err := stressTestIteration(targetCode, correctCode, checkerCode, provider, randomSeed)
 		if err != nil {
 			if responseErr, ok := err.(*ResponseError); ok && responseErr.errorType == contracts.ErrorTypeGeneratorExecutionFailed {
-				log.Printf("generator failure on iteration %d, skipping", iteration)
+				slog.Warn("generator_execution_failed", "iteration", iteration, "error_type", responseErr.errorType)
 				generatorExecutionErrors = append(generatorExecutionErrors, err)
 				if selectedGeneratorIndex >= 0 {
 					generatorWeights[selectedGeneratorIndex] *= 0.1

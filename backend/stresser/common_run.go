@@ -6,7 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -246,10 +246,10 @@ func compileCodeCached(code string, lang contracts.Language) compileResult {
 	}
 	directory := getCacheDirectory(code, lang)
 	if _, err := os.Stat(directory); err == nil {
-		log.Printf("Using cached compilation for %s", directory)
+		slog.Info("compile_cache_hit", "directory", directory, "language", lang)
 		return compileResult{Success: true, Directory: directory}
 	}
-	log.Printf("Compiling for the first time in %s", directory)
+	slog.Info("compile_cache_miss", "directory", directory, "language", lang)
 	return compileCode(directory, code, spec)
 }
 
@@ -286,13 +286,13 @@ func compileCode(workDir, code string, spec languageSpec) compileResult {
 			if stderr.Exceeded() {
 				stderrText = appendOutputLimitMessage(stderrText, "compiler stderr", maxCompileStderrBytes)
 			}
-			log.Printf(
-				"Compile step %d exceeded output limit: cmd=%q exit=%d stdout_exceeded=%t stderr_exceeded=%t",
-				i,
-				strings.Join(cmdArgs, " "),
-				exitCode,
-				stdout.Exceeded(),
-				stderr.Exceeded(),
+			slog.Warn(
+				"compile_output_limit_exceeded",
+				"step", i,
+				"command", strings.Join(cmdArgs, " "),
+				"exit_code", exitCode,
+				"stdout_exceeded", stdout.Exceeded(),
+				"stderr_exceeded", stderr.Exceeded(),
 			)
 			_ = os.RemoveAll(workDir)
 			return compileResult{
@@ -309,13 +309,13 @@ func compileCode(workDir, code string, spec languageSpec) compileResult {
 			if exitErr, ok := err.(*exec.ExitError); ok {
 				exitCode = exitErr.ExitCode()
 			}
-			log.Printf(
-				"Compile step %d failed: cmd=%q exit=%d stdout=%q stderr=%q",
-				i,
-				strings.Join(cmdArgs, " "),
-				exitCode,
-				truncateTestcase(stdoutText, 1200, 20),
-				truncateTestcase(stderrText, 1200, 20),
+			slog.Warn(
+				"compile_step_failed",
+				"step", i,
+				"command", strings.Join(cmdArgs, " "),
+				"exit_code", exitCode,
+				"stdout", truncateTestcase(stdoutText, 1200, 20),
+				"stderr", truncateTestcase(stderrText, 1200, 20),
 			)
 			_ = os.RemoveAll(workDir)
 			return compileResult{
@@ -328,7 +328,7 @@ func compileCode(workDir, code string, spec languageSpec) compileResult {
 			}
 		}
 	}
-	log.Printf("Compiled %s", sourcePath)
+	slog.Info("compile_done", "source_path", sourcePath)
 	return compileResult{Success: true, Directory: workDir}
 }
 
@@ -358,13 +358,14 @@ func compileAndGetDir(code string, lang contracts.Language, errorType contracts.
 		if len(result.Command) > 0 {
 			details["command"] = strings.Join(result.Command, " ")
 		}
-		log.Printf(
-			"Compile failed: step=%d exit=%d cmd=%q stderr=%q stdout=%q",
-			result.StepIndex,
-			result.ReturnCode,
-			details["command"],
-			truncateTestcase(result.Stderr, 1200, 20),
-			truncateTestcase(result.Stdout, 1200, 20),
+		slog.Warn(
+			"compile_failed",
+			"step", result.StepIndex,
+			"exit_code", result.ReturnCode,
+			"command", details["command"],
+			"stderr", truncateTestcase(result.Stderr, 1200, 20),
+			"stdout", truncateTestcase(result.Stdout, 1200, 20),
+			"error_type", errorType,
 		)
 		return "", NewResponseError(errorType, details)
 	}
@@ -394,7 +395,7 @@ func runCode(workDir, inputData string, lang contracts.Language, timeLimit float
 		return executionResult{Success: false, Verdict: contracts.VerdictInternalError, ReturnCode: -100}
 	}
 	if _, err := os.Stat(workDir); err != nil {
-		log.Printf("Work directory does not exist: %s", workDir)
+		slog.Error("work_directory_missing", "work_dir", workDir, "err", err)
 		return executionResult{Success: false, Verdict: contracts.VerdictInternalError, ReturnCode: -100}
 	}
 	if additionalArgs == nil {

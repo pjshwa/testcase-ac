@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -186,11 +186,11 @@ func checkAndCleanTmp() error {
 	used := total - available
 	usagePercent := (used / total) * 100
 	if usagePercent <= diskCleanupThresholdPercent {
-		log.Printf("Disk usage at %.1f%%", usagePercent)
+		slog.Info("tmp_disk_usage", "usage_percent", usagePercent)
 		return nil
 	}
 
-	log.Printf("Disk usage at %.1f%%, cleaning /tmp", usagePercent)
+	slog.Warn("tmp_disk_cleanup_start", "usage_percent", usagePercent, "threshold_percent", diskCleanupThresholdPercent)
 	entries, err := os.ReadDir("/tmp")
 	if err != nil {
 		return err
@@ -198,14 +198,14 @@ func checkAndCleanTmp() error {
 	for _, entry := range entries {
 		path := filepath.Join("/tmp", entry.Name())
 		if err := os.RemoveAll(path); err != nil {
-			log.Printf("failed to remove %s: %v", path, err)
+			slog.Warn("tmp_remove_failed", "path", path, "err", err)
 		}
 	}
 	var after syscall.Statfs_t
 	if err := syscall.Statfs("/tmp", &after); err == nil {
 		usedAfter := (float64(after.Blocks) - float64(after.Bavail)) * float64(after.Bsize)
 		freedMB := (used - usedAfter) / (1024 * 1024)
-		log.Printf("Cleaned /tmp, freed %.1f MB", freedMB)
+		slog.Info("tmp_disk_cleanup_done", "freed_mb", freedMB)
 	}
 	return nil
 }
@@ -213,14 +213,14 @@ func checkAndCleanTmp() error {
 func logTmpUsage() {
 	var stat syscall.Statfs_t
 	if err := syscall.Statfs("/tmp", &stat); err != nil {
-		log.Printf("Error reading /tmp usage: %v", err)
+		slog.Warn("tmp_disk_usage_failed", "err", err)
 		return
 	}
 	total := float64(stat.Blocks) * float64(stat.Bsize)
 	available := float64(stat.Bavail) * float64(stat.Bsize)
 	used := total - available
 	usagePercent := (used / total) * 100
-	log.Printf("log_tmp_usage: %.1f%%", usagePercent)
+	slog.Info("tmp_disk_usage", "usage_percent", usagePercent)
 }
 
 func mustJSON(value any) string {

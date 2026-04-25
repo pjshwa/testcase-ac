@@ -2,7 +2,8 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
+	"os"
 	"runtime/debug"
 	"time"
 
@@ -19,10 +20,18 @@ var (
 func handler(_ context.Context, event contracts.StressEvent) (result contracts.StressResult, err error) {
 	requestID := event.RequestID
 	startTime := time.Now()
-	log.Printf("stresser invocation start requestId=%s operation=%s", requestID, event.Operation)
+	if event.Operation == "" {
+		event.Operation = contracts.OperationStress
+	}
+	slog.Info("stresser_invocation_start", "request_id", requestID, "operation", event.Operation)
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			log.Printf("stresser internal panic requestId=%s panic=%v stack=%s", requestID, recovered, string(debug.Stack()))
+			slog.Error(
+				"stresser_internal_panic",
+				"request_id", requestID,
+				"panic", recovered,
+				"stack", string(debug.Stack()),
+			)
 			result = NewResponseError(
 				contracts.ErrorTypeInternalServerError,
 				map[string]any{"message": "Internal server error"},
@@ -34,11 +43,7 @@ func handler(_ context.Context, event contracts.StressEvent) (result contracts.S
 	defer runLogTmpUsage()
 
 	if err := runCheckAndCleanTmp(); err != nil {
-		log.Printf("tmp cleanup failed requestId=%s err=%v", requestID, err)
-	}
-
-	if event.Operation == "" {
-		event.Operation = contracts.OperationStress
+		slog.Warn("tmp_cleanup_failed", "request_id", requestID, "err", err)
 	}
 
 	switch event.Operation {
@@ -52,12 +57,17 @@ func handler(_ context.Context, event contracts.StressEvent) (result contracts.S
 	}
 	if err != nil {
 		if responseErr, ok := err.(*ResponseError); ok {
-			log.Printf("stresser ResponseError requestId=%s type=%s", requestID, responseErr.errorType)
+			slog.Warn("stresser_response_error", "request_id", requestID, "error_type", responseErr.errorType)
 			response := responseErr.ToResponse(requestID)
 			response.RuntimeSeconds = roundSeconds(time.Since(startTime))
 			return response, nil
 		}
-		log.Printf("stresser internal error requestId=%s err=%v stack=%s", requestID, err, string(debug.Stack()))
+		slog.Error(
+			"stresser_internal_error",
+			"request_id", requestID,
+			"err", err,
+			"stack", string(debug.Stack()),
+		)
 		response := NewResponseError(
 			contracts.ErrorTypeInternalServerError,
 			map[string]any{"message": "Internal server error"},
@@ -68,11 +78,19 @@ func handler(_ context.Context, event contracts.StressEvent) (result contracts.S
 
 	result.RequestID = requestID
 	result.RuntimeSeconds = roundSeconds(time.Since(startTime))
-	log.Printf("stresser invocation done requestId=%s", requestID)
+	slog.Info(
+		"stresser_invocation_done",
+		"request_id", requestID,
+		"runtime_seconds", result.RuntimeSeconds,
+		"error", result.Error,
+		"total_cases", result.TotalCases,
+		"wrong_cases", result.WrongCasesCount,
+		"execution_failed_cases", result.ExecutionFailedCasesCount,
+	)
 	return result, nil
 }
 
 func main() {
-	log.SetFlags(log.LstdFlags)
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	lambda.Start(handler)
 }
