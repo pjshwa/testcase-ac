@@ -25,6 +25,11 @@ const (
 	MaxRunStdoutBytes     = 8 << 20
 	MaxRunStderrBytes     = 1 << 20
 	OutputLimitReturnCode = -103
+	// Very low BOJ memory limits are below the virtual memory needed to start
+	// dynamically linked native binaries in the runtime image.
+	// There seems to be no good way of enforcing low memory limit in docker + lamdba
+	// (ex. 4MB for https://www.acmicpc.net/problem/2293)
+	minNativeVirtualMemoryMB = 64
 )
 
 var (
@@ -309,8 +314,9 @@ func Run(ctx context.Context, program CompiledProgram, inputData string, args []
 		if inputFilePath != "" {
 			stdinPath = inputFilePath
 		}
+		virtualMemoryMB := virtualMemoryLimitMB(program.Language, limits.MemoryMB)
 		script := `mem="$1"; stdin_path="$2"; shift 2; ulimit -c 0; ulimit -v "$mem"; ulimit -u 0; exec "$@" < "$stdin_path"`
-		shellArgs := []string{"-lc", script, "bash", fmt.Sprintf("%d", limits.MemoryMB*1024), stdinPath}
+		shellArgs := []string{"-lc", script, "bash", fmt.Sprintf("%d", virtualMemoryMB*1024), stdinPath}
 		shellArgs = append(shellArgs, command...)
 		cmd = exec.CommandContext(runCtx, "bash", shellArgs...)
 	}
@@ -521,6 +527,15 @@ func normalizeLimits(requested, fallback Limits) Limits {
 		requested.StderrBytes = defaults.StderrBytes
 	}
 	return requested
+}
+
+func virtualMemoryLimitMB(language contracts.Language, requestedMB int) int {
+	switch language {
+	case contracts.LanguageCpp23, contracts.LanguageCpp20, contracts.LanguageCpp17, contracts.LanguageCpp14, contracts.LanguageC11, contracts.LanguageC99, contracts.LanguageRust2021:
+		return atLeast(requestedMB, minNativeVirtualMemoryMB)
+	default:
+		return requestedMB
+	}
 }
 
 func exitCodeOf(err error) int {

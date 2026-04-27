@@ -1,48 +1,59 @@
-#include <iostream>
-#include <stdio.h>
-#include <string.h>
-#include <limits.h>
-#include <vector>
-#include <cassert>
-
-#define ll long long
-#define sz(x) ((int)(x).size())
-#define rep(i, n) for(int i=0; i<(n); i++)
-#define set0(arr) memset(arr, 0, sizeof(arr))
-
+#include <bits/stdc++.h>
 using namespace std;
-/*
-This year in integer: k.
-k/M = a ... x
-k/N = b ... y
-So k=aM+x=bN+y, while 0<=a<=lcf(M,N)/N, 0<=b<=lcf(M,N)/M
-So aM+(x-y) has to be divisible to N.
-------
-12 10 1 1
-1/12 = 0 ... 1
-1/10 = 0 ... 1
 
-*/
+long long gcdExtended(long long a, long long b, long long& x, long long& y) {
+    if (b == 0) {
+        x = 1;
+        y = 0;
+        return a;
+    }
+    long long x1, y1;
+    long long g = gcdExtended(b, a % b, x1, y1);
+    x = y1;
+    y = x1 - (a / b) * y1;
+    return g;
+}
+
+long long modInverse(long long value, long long mod) {
+    long long x, y;
+    gcdExtended(value, mod, x, y);
+    x %= mod;
+    if (x < 0) x += mod;
+    return x;
+}
+
 int main() {
-	int T;
-	cin >> T;
-    assert(T <= 10000);
-	while(T--) {
-		int M,N,x,y;
-		cin >> M >> N >> x >> y;
-		if(x == M) x = 0;
-		if(y == N) y = 0;
-		int a = -1;
-		for(int i=0;i<=N;i++) {
-			if( i*M+x > 0 && !((i*M+x-y) % N) ) {
-				a = i;
-				break;
-			}
-		}
-		if(a == -1){
-			cout << "-1\n";
-		} else {
-			cout << (a*M+x) << '\n';
-		}
-	}
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+
+    int T;
+    cin >> T;
+    while (T--) {
+        long long M, N, x, y;
+        cin >> M >> N >> x >> y;
+
+        long long targetX = x % M;
+        long long targetY = y % N;
+        long long g = gcd(M, N);
+        long long diff = targetY - targetX;
+
+        if (diff % g != 0) {
+            cout << "-1\n";
+            continue;
+        }
+
+        long long reducedM = M / g;
+        long long reducedN = N / g;
+        long long t = (diff / g) % reducedN;
+        if (t < 0) t += reducedN;
+        t = (t * modInverse(reducedM % reducedN, reducedN)) % reducedN;
+
+        long long answer = targetX + M * t;
+        if (answer == 0) {
+            answer = lcm(M, N);
+        }
+        cout << answer << '\n';
+    }
+
+    return 0;
 }

@@ -347,6 +347,34 @@ int main() {
 	}
 }
 
+func TestRunCodeLowNativeMemoryLimitStillStartsBinary(t *testing.T) {
+	requireCommands(t, "g++")
+	requireVirtualMemoryLimitSupport(t)
+
+	cppCode := `#include <iostream>
+
+int main() {
+    int a, b;
+    std::cin >> a >> b;
+    std::cout << a + b << "\n";
+    return 0;
+}
+`
+
+	compileResult := compileCodeCached(cppCode, "cpp23")
+	if !compileResult.Success {
+		t.Fatalf("compileCodeCached() failed: %+v", compileResult)
+	}
+
+	runResult := runCode(compileResult.Directory, "1 2\n", "cpp23", 2, 4, nil)
+	if !runResult.Success {
+		t.Fatalf("runCode() failed under low native memory limit: %+v", runResult)
+	}
+	if got := CleanStdout(runResult.Stdout, "no"); got != "3" {
+		t.Fatalf("runCode() stdout = %q, want %q", got, "3")
+	}
+}
+
 func TestRunCodeSimpleAPlusBSupportedLanguages(t *testing.T) {
 	for _, tc := range supportedLanguageSmokeCases() {
 		t.Run(tc.Name, func(t *testing.T) {
